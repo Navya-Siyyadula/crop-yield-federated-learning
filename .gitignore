@@ -1,0 +1,16 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+*.egg-info/
+.ipynb_checkpoints/
+data/raw/*
+data/interim/*
+data/cleaned/*
+data/processed/*
+data/client_data/*/*
+!data/**/.gitkeep
+results/**/*
+!results/**/.gitkeep
+.DS_Store
