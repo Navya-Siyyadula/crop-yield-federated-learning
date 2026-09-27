@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.federated.fedavg import fedavg
+rom federated.fedavg import fedavg
 from federated.rounds import run_federated_training
 
 
