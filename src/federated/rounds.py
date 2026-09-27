@@ -1,12 +1,11 @@
 import random
 from src.federated.fedavg import fedavg
 
-# ✅ Single round
 def run_round(global_model, clients):
     print("Running one round...")
     updates = []
 
-    for i, c in enumerate(clients):
+    for c in clients:
         print(f"{c} training...")
         update = random.uniform(0.5, 1.5)
         updates.append(update)
@@ -14,7 +13,6 @@ def run_round(global_model, clients):
     return updates
 
 
-# ✅ REQUIRED by tests
 def run_federated_training(global_model, clients, num_rounds=3):
     print("🚀 Starting Federated Learning")
 
