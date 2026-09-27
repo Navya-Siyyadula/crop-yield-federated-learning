@@ -8,7 +8,17 @@ venv/
 data/raw/*
 data/interim/*
 data/cleaned/*
+
 data/processed/*
+!data/processed/.gitkeep
+!data/processed/X_train.csv
+!data/processed/X_val.csv
+!data/processed/X_test.csv
+!data/processed/y_train.csv
+!data/processed/y_val.csv
+!data/processed/y_test.csv
+!data/processed/preprocessor.pkl
+
 data/client_data/*/*
 !data/**/.gitkeep
 results/**/*
