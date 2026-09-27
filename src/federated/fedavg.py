@@ -3,8 +3,8 @@ import numpy as np
 def fedavg(updates):
     """
     updates = [
-        ([weights_layer1, weights_layer2, ...], num_samples),
-        ...
+        (weights, num_samples),
+        (weights, num_samples)
     ]
     """
 
@@ -12,15 +12,20 @@ def fedavg(updates):
 
     num_layers = len(updates[0][0])
 
-    aggregated = []
+    averaged_weights = []
 
-    for layer_idx in range(num_layers):
-        weighted_sum = 0
+    for layer in range(num_layers):
+        weighted_sum = None
 
         for weights, num_samples in updates:
-            weighted_sum += weights[layer_idx] * num_samples
+            layer_weights = weights[layer] * num_samples
 
-        aggregated_layer = weighted_sum / total_samples
-        aggregated.append(aggregated_layer)
+            if weighted_sum is None:
+                weighted_sum = layer_weights
+            else:
+                weighted_sum += layer_weights
 
-    return aggregated
+        averaged_layer = weighted_sum / total_samples
+        averaged_weights.append(averaged_layer)
+
+    return averaged_weights
