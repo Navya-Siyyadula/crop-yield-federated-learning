@@ -9,6 +9,7 @@ def run_round(global_model, clients):
     return updates
 
 
+
 def run_federated_training(global_model, clients, num_rounds=3):
     history = []
 
