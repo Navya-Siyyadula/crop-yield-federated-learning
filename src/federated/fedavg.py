@@ -2,8 +2,10 @@ import numpy as np
 
 def fedavg(updates):
     """
-    updates: list of tuples -> (weights, num_samples)
-    weights: list of numpy arrays
+    updates = [
+        ([weights_layer1, weights_layer2, ...], num_samples),
+        ...
+    ]
     """
 
     total_samples = sum(num_samples for _, num_samples in updates)
