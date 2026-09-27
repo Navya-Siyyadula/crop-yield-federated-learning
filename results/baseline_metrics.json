@@ -1,0 +1,24 @@
+{
+    "model": "RandomForestRegressor",
+    "task": "regression",
+    "target": "yield_kg_per_hectare",
+    "n_features": 38,
+    "train_samples": 350,
+    "validation_samples": 75,
+    "test_samples": 75,
+    "train_metrics": {
+        "MAE": 386.59796457142954,
+        "RMSE": 448.0407297626697,
+        "R2": 0.8522243586760319
+    },
+    "validation_metrics": {
+        "MAE": 1040.729108,
+        "RMSE": 1215.5774298262631,
+        "R2": -0.14310461175577327
+    },
+    "test_metrics": {
+        "MAE": 1085.6482106666672,
+        "RMSE": 1202.60502710259,
+        "R2": 0.021396600209021344
+    }
+}
