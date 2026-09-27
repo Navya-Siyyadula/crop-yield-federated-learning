@@ -23,3 +23,12 @@ Dense(32, ReLU)
 Dense(1)
         ↓
 Predicted Crop Yield
+## Interface Contract
+
+- Input shape: `(batch_size, 1, 38)`
+- Output shape: `(batch_size, 1)`
+- Input: 38 processed features represented as one timestep
+- Output: continuous `yield_kg_per_hectare`
+- Task: Regression
+
+The dataset does not contain genuine multi-timestep sequences. Therefore, this implementation is treated as a single-timestep LSTM experiment and does not claim to learn temporal dependencies.
