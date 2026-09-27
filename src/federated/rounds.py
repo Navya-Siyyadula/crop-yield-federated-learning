@@ -1,5 +1,5 @@
 import random
-from src.federated.fedavg import fedavg
+from federated.fedavg import fedavg
 
 def run_round(global_model, clients):
     print("Running one round...")
