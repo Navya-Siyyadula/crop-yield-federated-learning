@@ -3,6 +3,7 @@
 A federated learning system for predicting crop yield across multiple, non-colocated data sources (clients), without centralizing raw agricultural data. Includes an encrypted FL variant, performance/latency benchmarking, and a monitoring dashboard.
 
 ## Overview
+test trigger
 
 Traditional ML pipelines require pooling all data centrally, which isn't always feasible or desirable for distributed agricultural data (privacy, bandwidth, ownership). This project trains a shared crop-yield model across multiple simulated clients using **Federated Averaging (FedAvg)**, comparing it against a centralized baseline, and optionally applying **homomorphic encryption** to protect model updates in transit.
 
