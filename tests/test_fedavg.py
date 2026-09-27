@@ -4,7 +4,6 @@ from federated.fedavg import fedavg
 from federated.rounds import run_federated_training
 
 
-
 def test_fedavg_equal_clients():
 
     client_updates = [
