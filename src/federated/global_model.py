@@ -4,3 +4,4 @@ class GlobalModel:
 
     def update(self, new_weights):
         self.weights = new_weights
+        return self.weights   # 🔥 IMPORTANT (tests may expect return)
