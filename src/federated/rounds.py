@@ -6,26 +6,21 @@ def run_round(global_model, clients):
     updates = []
 
     for c in clients:
-        print(f"{c} training...")
-        update = random.uniform(0.5, 1.5)
-        updates.append(update)
+        updated_weights, num_samples = c(global_model)
+        updates.append((updated_weights, num_samples))
 
     return updates
 
 
 def run_federated_training(global_model, clients, num_rounds=3):
-    print("🚀 Starting Federated Learning")
 
-    for r in range(num_rounds):
-        print(f"\n🔄 Round {r+1}")
+    history = []
 
+    for _ in range(num_rounds):
         updates = run_round(global_model, clients)
 
-        print("Aggregating updates...")
-        global_weights = fedavg(updates)
+        global_model = fedavg(updates)
 
-        print("Updating global model...")
-        global_model.update(global_weights)
+        history.append(global_model)
 
-    print("\n✅ Training Complete")
-    return global_model
+    return global_model, history
