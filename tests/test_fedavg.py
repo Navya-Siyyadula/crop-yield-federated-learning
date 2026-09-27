@@ -1,8 +1,7 @@
 import numpy as np
 
 from federated.fedavg import fedavg
-from src.federated.rounds import run_federated_training
-
+from federated.rounds import run_federated_training
 
 def test_fedavg_equal_clients():
 
