@@ -4,7 +4,7 @@ AES-256 decryption for federated learning model updates.
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from security.encryption import (
+from src.security.encryption import (
     AES_KEY_SIZE,
     NONCE_SIZE,
 )
