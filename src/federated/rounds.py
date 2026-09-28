@@ -1,31 +1,25 @@
-import random
-from src.federated.fedavg import fedavg
-
-def run_round(global_model, clients):
-    print("Running one round...")
-    updates = []
-
-    for c in clients:
-        print(f"{c} training...")
-        update = random.uniform(0.5, 1.5)
-        updates.append(update)
-
-    return updates
+from federated.fedavg import fedavg
 
 
-def run_federated_training(global_model, clients, num_rounds=3):
-    print("🚀 Starting Federated Learning")
+def run_federated_training(global_weights, clients, num_rounds=3):
+    print("Starting Federated Learning")
 
-    for r in range(num_rounds):
-        print(f"\n🔄 Round {r+1}")
+    history = []
 
-        updates = run_round(global_model, clients)
+    for round_number in range(num_rounds):
+        print(f"\nRound {round_number + 1}")
+
+        client_updates = []
+
+        for client in clients:
+            print(f"{client} training...")
+            update = client(global_weights)
+            client_updates.append(update)
 
         print("Aggregating updates...")
-        global_weights = fedavg(updates)
+        global_weights = fedavg(client_updates)
 
-        print("Updating global model...")
-        global_model.update(global_weights)
+        history.append(global_weights)
 
-    print("\n✅ Training Complete")
-    return global_model
+    print("\nTraining Complete")
+    return global_weights, history
