@@ -1,0 +1,20 @@
+[project]
+name = "crop-yield-federated-learning"
+version = "0.1.0"
+description = "Federated learning system for crop yield prediction across distributed client data sources"
+authors = [
+    { name = "Navya Siyyadula" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.black]
+line-length = 100
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"

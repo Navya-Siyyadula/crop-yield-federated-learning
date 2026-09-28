@@ -54,7 +54,6 @@ def fedavg(client_updates: Sequence[ClientUpdate]) -> ModelWeights:
     if not reference_weights:
         raise ValueError("Model weights cannot be empty.")
 
-    # Validate every client's model structure.
     for weights, sample_count in client_updates:
 
         if sample_count < 0:
@@ -75,13 +74,11 @@ def fedavg(client_updates: Sequence[ClientUpdate]) -> ModelWeights:
                     "Corresponding model layers must have the same shape."
                 )
 
-    # Preserve the dtype of each reference LSTM weight.
     global_weights = [
         np.zeros_like(np.asarray(layer))
         for layer in reference_weights
     ]
 
-    # Sample-count weighted averaging.
     for client_weights, sample_count in client_updates:
 
         client_weight = sample_count / total_samples
@@ -93,7 +90,6 @@ def fedavg(client_updates: Sequence[ClientUpdate]) -> ModelWeights:
                 * client_weight
             )
 
-    # Explicitly restore the original dtype of each layer.
     return [
         np.asarray(
             layer,
