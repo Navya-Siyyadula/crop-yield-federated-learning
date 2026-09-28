@@ -2,40 +2,37 @@
 Encrypted LSTM model-update bridge.
 
 Pipeline:
+
 LSTM weights
     -> NPZ serialization
     -> AES-256-GCM encryption
-    -> Flower Parameters
+    -> Flower Parameters as raw bytes
 
+The encrypted payload is treated as opaque bytes by Flower.
 Sample count is kept separately as FL metadata.
 """
 
 import numpy as np
 
-from flwr.common import (
-    Parameters,
-    ndarrays_to_parameters,
-    parameters_to_ndarrays,
-)
+from flwr.common import Parameters
 
-from src.security.encryption import (
-    AES_KEY_SIZE,
-    NONCE_SIZE,
-    encrypt_model_update,
-)
+from src.security.encryption import AES_KEY_SIZE, NONCE_SIZE, encrypt_model_update
 from src.security.decryption import decrypt_model_update
-
 from src.federated.serialize import (
     serialize_model_update,
     deserialize_model_update,
 )
 
 
+TENSOR_TYPE = "encrypted_lstm_aes256_gcm"
+
+
 def serialize_and_encrypt_weights(
     weights: list[np.ndarray],
     key: bytes,
 ) -> bytes:
-    """Serialize LSTM weights and encrypt them."""
+    """Serialize LSTM weights and encrypt them with AES-256-GCM."""
+
     serialized = serialize_model_update(weights)
 
     return encrypt_model_update(
@@ -48,21 +45,16 @@ def decrypt_and_deserialize_weights(
     encrypted_data: bytes,
     key: bytes,
 ) -> list[np.ndarray]:
-    """Decrypt and restore LSTM weight arrays."""
+    """Decrypt and deserialize an encrypted LSTM update."""
+
     if not isinstance(encrypted_data, bytes):
-        raise TypeError(
-            "Encrypted weights must be bytes."
-        )
+        raise TypeError("Encrypted weights must be bytes.")
 
     if len(key) != AES_KEY_SIZE:
-        raise ValueError(
-            "AES-256 key must be exactly 32 bytes."
-        )
+        raise ValueError("AES-256 key must be exactly 32 bytes.")
 
     if len(encrypted_data) <= NONCE_SIZE:
-        raise ValueError(
-            "Encrypted weights are too short."
-        )
+        raise ValueError("Encrypted weights are too short.")
 
     serialized = decrypt_model_update(
         encrypted_data,
@@ -70,7 +62,7 @@ def decrypt_and_deserialize_weights(
     )
 
     return deserialize_model_update(
-        serialized
+        serialized,
     )
 
 
@@ -78,19 +70,22 @@ def encrypted_weights_to_parameters(
     weights: list[np.ndarray],
     key: bytes,
 ) -> Parameters:
-    """Serialize + encrypt LSTM weights for Flower."""
+    """
+    Convert encrypted LSTM weights into Flower Parameters.
+
+    The encrypted payload is stored directly as bytes.
+    It is NOT converted into a NumPy array because it is already
+    encrypted opaque data.
+    """
+
     encrypted = serialize_and_encrypt_weights(
         weights,
         key,
     )
 
-    encrypted_array = np.frombuffer(
-        encrypted,
-        dtype=np.uint8,
-    ).copy()
-
-    return ndarrays_to_parameters(
-        [encrypted_array]
+    return Parameters(
+        tensor_type=TENSOR_TYPE,
+        tensors=[encrypted],
     )
 
 
@@ -98,17 +93,21 @@ def parameters_to_decrypted_weights(
     parameters: Parameters,
     key: bytes,
 ) -> list[np.ndarray]:
-    """Decrypt Flower Parameters and restore LSTM weights."""
-    arrays = parameters_to_ndarrays(
-        parameters
-    )
+    """
+    Extract the raw encrypted payload from Flower Parameters,
+    then decrypt and deserialize the LSTM weights.
+    """
 
-    if not arrays:
-        raise ValueError(
-            "Encrypted LSTM parameters are empty."
-        )
+    if not isinstance(parameters, Parameters):
+        raise TypeError("parameters must be a Flower Parameters object.")
 
-    encrypted_data = arrays[0].tobytes()
+    if not parameters.tensors:
+        raise ValueError("Encrypted LSTM parameters are empty.")
+
+    encrypted_data = parameters.tensors[0]
+
+    if not isinstance(encrypted_data, bytes):
+        raise TypeError("Encrypted LSTM parameter must be bytes.")
 
     return decrypt_and_deserialize_weights(
         encrypted_data,

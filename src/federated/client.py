@@ -1,164 +1,195 @@
-
 """
-Flower client for one simulated edge server.
+Flower client for encrypted LSTM Federated Learning.
 
-Each client:
-1. Loads its local training data.
-2. Trains a Random Forest.
-3. Serialises and AES-256 encrypts the trained model.
-4. Sends the encrypted model through Flower.
-5. Decrypts the global model received from the server.
+Uses the low-level Flower Client API so encrypted model-update bytes
+are never automatically deserialized as NumPy arrays.
 """
 
 import argparse
-import pandas as pd
 from pathlib import Path
 
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_absolute_error
-
 import flwr as fl
-
-from src.security.encrypted_update import (
-    encrypted_model_to_parameters,
-    parameters_to_encrypted_model,
+import numpy as np
+from flwr.common import (
+    Code,
+    FitIns,
+    FitRes,
+    GetParametersIns,
+    GetParametersRes,
+    EvaluateIns,
+    EvaluateRes,
+    Parameters,
+    Status,
 )
 
-from src.security.key_manager import (
-    load_key_from_environment,
+from src.ml.lstm_model import build_lstm_model
+from src.security.key_manager import load_key_from_environment
+from src.security.lstm_encrypted_update import (
+    encrypted_weights_to_parameters,
+    parameters_to_decrypted_weights,
 )
 
-from src.federated.rf_serialization import (
-    empty_parameters,
-)
+
+CLIENT_DATA_DIR = Path("data/client_data")
+VALIDATION_DIR = Path("data/processed")
+
+INPUT_FEATURES = 38
+LOCAL_EPOCHS = 1
+BATCH_SIZE = 32
 
 
-EDGE_DIR = Path("edge_zip")
-SHARED_DIR = Path("agri_zip")
-RANDOM_STATE = 42
+class EncryptedLSTMClient(fl.client.Client):
 
+    def __init__(self, client_id: int):
+        self.client_id = client_id
+        self.key = load_key_from_environment()
 
-class RFEdgeClient(fl.client.NumPyClient):
+        client_dir = CLIENT_DATA_DIR / f"client_{client_id:02d}"
 
-    def __init__(self, server_id: int):
-
-        self.server_id = server_id
-
-        # Load the shared AES-256 key
-        self.encryption_key = load_key_from_environment()
-
-        # Load local training data
-        self.X_train = pd.read_csv(
-            EDGE_DIR / f"client_{server_id}_X.csv"
+        self.X = np.loadtxt(
+            client_dir / f"client_{client_id}_X.csv",
+            delimiter=",",
+            skiprows=1,
         )
 
-        self.y_train = pd.read_csv(
-            EDGE_DIR / f"client_{server_id}_y.csv"
-        ).squeeze()
-
-        # Load shared validation data
-        self.X_val = pd.read_csv(
-            SHARED_DIR / "X_val.csv"
+        self.y = np.loadtxt(
+            client_dir / f"client_{client_id}_y.csv",
+            delimiter=",",
+            skiprows=1,
         )
 
-        self.y_val = pd.read_csv(
-            SHARED_DIR / "y_val.csv"
-        ).squeeze()
+        self.X = np.asarray(self.X, dtype=np.float32).reshape(
+            -1, 1, INPUT_FEATURES
+        )
+        self.y = np.asarray(self.y, dtype=np.float32).reshape(-1)
 
-        self.model = None
+        self.model = build_lstm_model(INPUT_FEATURES)
 
-    def get_parameters(self, config):
+        self.X_val = None
+        self.y_val = None
 
-        if self.model is None:
-            return empty_parameters().tensors
+        val_x_path = VALIDATION_DIR / "X_val.csv"
+        val_y_path = VALIDATION_DIR / "y_val.csv"
 
-        return encrypted_model_to_parameters(
-            self.model,
-            self.encryption_key,
-        ).tensors
+        if val_x_path.exists() and val_y_path.exists():
+            self.X_val = np.loadtxt(
+                val_x_path,
+                delimiter=",",
+                skiprows=1,
+            ).astype(np.float32).reshape(-1, 1, INPUT_FEATURES)
 
-    def fit(self, parameters, config):
+            self.y_val = np.loadtxt(
+                val_y_path,
+                delimiter=",",
+                skiprows=1,
+            ).astype(np.float32).reshape(-1)
 
         print(
-            f"Client {self.server_id}: "
-            "training Random Forest..."
+            f"Client {self.client_id}: "
+            f"training data {self.X.shape}, {self.y.shape}"
         )
 
-        # Train local Random Forest
-        self.model = RandomForestRegressor(
-            n_estimators=100,
-            random_state=RANDOM_STATE,
+    def get_parameters(
+        self,
+        ins: GetParametersIns,
+    ) -> GetParametersRes:
+
+        encrypted_parameters = encrypted_weights_to_parameters(
+            self.model.get_weights(),
+            self.key,
         )
 
-        self.model.fit(
-            self.X_train,
-            self.y_train,
+        return GetParametersRes(
+            status=Status(code=Code.OK, message="OK"),
+            parameters=encrypted_parameters,
         )
 
-        # Serialize + AES-256 encrypt the model
-        params = encrypted_model_to_parameters(
-            self.model,
-            self.encryption_key,
-        )
-
-        num_examples = len(
-            self.X_train
-        )
+    def fit(self, ins: FitIns) -> FitRes:
 
         print(
-            f"Client {self.server_id}: "
-            f"trained on {num_examples} samples."
+            f"Client {self.client_id}: "
+            "starting local LSTM training..."
         )
+
+        # IMPORTANT:
+        # Do NOT call parameters_to_ndarrays().
+        # The parameters contain encrypted raw bytes.
+        weights = parameters_to_decrypted_weights(
+            ins.parameters,
+            self.key,
+        )
+
+        self.model.set_weights(weights)
+
+        history = self.model.fit(
+            self.X,
+            self.y,
+            epochs=LOCAL_EPOCHS,
+            batch_size=BATCH_SIZE,
+            verbose=0,
+            shuffle=True,
+        )
+
+        updated_weights = self.model.get_weights()
+
+        encrypted_parameters = encrypted_weights_to_parameters(
+            updated_weights,
+            self.key,
+        )
+
+        final_loss = float(history.history["loss"][-1])
+        final_mae = float(history.history["mae"][-1])
 
         print(
-            f"Client {self.server_id}: "
-            "model encrypted successfully."
+            f"Client {self.client_id}: "
+            f"training complete | loss={final_loss:.4f} "
+            f"| MAE={final_mae:.4f}"
         )
 
-        return (
-            params.tensors,
-            num_examples,
-            {
-                "server_id": self.server_id,
+        return FitRes(
+            status=Status(code=Code.OK, message="OK"),
+            parameters=encrypted_parameters,
+            num_examples=len(self.X),
+            metrics={
+                "loss": final_loss,
+                "mae": final_mae,
             },
         )
 
-    def evaluate(self, parameters, config):
+    def evaluate(self, ins: EvaluateIns) -> EvaluateRes:
 
-        # Convert Flower Parameters back into
-        # the encrypted Random Forest model
-        from flwr.common import Parameters
-
-        encrypted_parameters = Parameters(
-            tensor_type="",
-            tensors=parameters,
+        weights = parameters_to_decrypted_weights(
+            ins.parameters,
+            self.key,
         )
 
-        global_model = parameters_to_encrypted_model(
-            encrypted_parameters,
-            self.encryption_key,
-        )
+        self.model.set_weights(weights)
 
-        # Evaluate the decrypted global model
-        predictions = global_model.predict(
-            self.X_val
-        )
+        if self.X_val is None:
+            return EvaluateRes(
+                status=Status(code=Code.OK, message="No validation data"),
+                loss=0.0,
+                num_examples=0,
+                metrics={},
+            )
 
-        mae = mean_absolute_error(
+        loss, mae = self.model.evaluate(
+            self.X_val,
             self.y_val,
-            predictions,
+            verbose=0,
         )
 
         print(
-            f"Client {self.server_id}: "
-            f"validation MAE = {mae:.2f}"
+            f"Client {self.client_id}: "
+            f"validation loss={float(loss):.4f} "
+            f"| MAE={float(mae):.4f}"
         )
 
-        return (
-            float(mae),
-            len(self.X_val),
-            {
-                "server_id": self.server_id,
+        return EvaluateRes(
+            status=Status(code=Code.OK, message="OK"),
+            loss=float(loss),
+            num_examples=len(self.X_val),
+            metrics={
                 "mae": float(mae),
             },
         )
@@ -171,21 +202,18 @@ if __name__ == "__main__":
     parser.add_argument(
         "--server-id",
         type=int,
-        required=True,
         choices=[1, 2, 3, 4],
+        required=True,
     )
 
     parser.add_argument(
         "--server-address",
-        type=str,
         default="127.0.0.1:8080",
     )
 
     args = parser.parse_args()
 
-    client = RFEdgeClient(
-        args.server_id
-    ).to_client()
+    client = EncryptedLSTMClient(args.server_id)
 
     fl.client.start_client(
         server_address=args.server_address,

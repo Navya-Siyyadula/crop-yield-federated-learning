@@ -1,160 +1,110 @@
-
 """
-Custom Flower Strategy for encrypted Random Forest clients.
-
-Server flow:
-
-Client encrypted model
-        ↓
-AES-256 decryption
-        ↓
-Random Forest model
-        ↓
-Federated tree aggregation
-        ↓
-Global Random Forest
-        ↓
-AES-256 encryption
-        ↓
-Flower global parameters
+Flower strategy for encrypted LSTM Federated Learning.
 """
 
-from typing import List, Tuple, Optional, Dict
+from typing import Dict, List, Optional, Tuple
 
 import flwr as fl
 from flwr.common import FitRes, Parameters
 
-from flwr.server.client_proxy import ClientProxy
-
-from src.security.encrypted_update import (
-    parameters_to_encrypted_model,
-    encrypted_model_to_parameters,
-)
-
-from src.security.key_manager import (
-    load_key_from_environment,
-)
-
-from src.federated.fedavg_forest import (
-    get_client_update,
-    aggregate_federated_forest,
+from src.federated.fedavg import fedavg
+from src.ml.lstm_model import build_lstm_model
+from src.security.key_manager import load_key_from_environment
+from src.security.lstm_encrypted_update import (
+    encrypted_weights_to_parameters,
+    parameters_to_decrypted_weights,
 )
 
 
-class RFTreeAggregationStrategy(
-    fl.server.strategy.FedAvg
-):
+class LSTMEncryptedFedAvgStrategy(fl.server.strategy.FedAvg):
+    """FedAvg strategy for AES-256-GCM encrypted LSTM updates."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Create the initial global LSTM model.
+        self.initial_model = build_lstm_model(input_features=38)
+
+    def initialize_parameters(
+        self,
+        client_manager: fl.server.client_manager.ClientManager,
+    ) -> Optional[Parameters]:
+        """Provide encrypted initial LSTM weights to Flower."""
+
+        key = load_key_from_environment()
+
+        initial_weights = self.initial_model.get_weights()
+
+        return encrypted_weights_to_parameters(
+            initial_weights,
+            key,
+        )
 
     def aggregate_fit(
         self,
         server_round: int,
-        results: List[
-            Tuple[ClientProxy, FitRes]
+        results: List[Tuple[fl.server.client_proxy.ClientProxy, FitRes]],
+        failures: List[
+            Tuple[
+                fl.server.client_proxy.ClientProxy,
+                FitRes,
+            ]
         ],
-        failures,
-    ) -> Tuple[
-        Optional[Parameters],
-        Dict,
-    ]:
+    ) -> Tuple[Optional[Parameters], Dict[str, float]]:
 
         if not results:
             return None, {}
 
-        # Load shared AES-256 key
-        encryption_key = (
-            load_key_from_environment()
-        )
+        encryption_key = load_key_from_environment()
 
         client_updates = []
 
-        print(
-            f"\nServer: decrypting "
-            f"{len(results)} client updates..."
-        )
+        print(f"\n--- Federated Learning Round {server_round} ---")
+        print(f"Received updates from {len(results)} clients.")
 
         for _, fit_res in results:
 
-            # Rebuild Flower Parameters
             encrypted_parameters = Parameters(
-                tensor_type="",
+                tensor_type=fit_res.parameters.tensor_type,
                 tensors=fit_res.parameters.tensors,
             )
 
-            # Decrypt and restore client Random Forest
-            model = parameters_to_encrypted_model(
+            weights = parameters_to_decrypted_weights(
                 encrypted_parameters,
                 encryption_key,
             )
 
-            print(
-                "Server: client model "
-                "decrypted successfully."
-            )
-
             client_updates.append(
-                get_client_update(
-                    model,
+                (
+                    weights,
                     fit_res.num_examples,
                 )
             )
 
-        # Federated Random Forest aggregation
-        global_model = aggregate_federated_forest(
-            client_updates,
-            total_trees=400,
+        # Sample-count weighted FedAvg.
+        global_weights = fedavg(client_updates)
+
+        # Encrypt the new global model before Flower distributes it.
+        encrypted_global_parameters = encrypted_weights_to_parameters(
+            global_weights,
+            encryption_key,
         )
 
-        print(
-            "Server: global Random Forest "
-            "aggregation completed."
-        )
-
-        # Encrypt the aggregated global model
-        encrypted_global_parameters = (
-            encrypted_model_to_parameters(
-                global_model,
-                encryption_key,
-            )
-        )
-
-        print(
-            "Server: global model "
-            "encrypted successfully."
+        total_samples = sum(
+            sample_count
+            for _, sample_count in client_updates
         )
 
         metrics = {
-            "num_clients": len(results),
-            "total_samples": sum(
-                update["n_samples"]
-                for update in client_updates
-            ),
+            "num_clients": float(len(results)),
+            "total_samples": float(total_samples),
         }
 
-        return (
-            encrypted_global_parameters,
-            metrics,
+        print(
+            f"Round {server_round} aggregation complete."
+        )
+        print(
+            f"Total training samples: {total_samples}"
         )
 
-    def aggregate_evaluate(
-        self,
-        server_round,
-        results,
-        failures,
-    ):
-
-        if not results:
-            return None, {}
-
-        maes = [
-            result.metrics["mae"]
-            for _, result in results
-        ]
-
-        avg_mae = sum(maes) / len(maes)
-
-        return (
-            avg_mae,
-            {
-                "avg_mae": avg_mae,
-            },
-        )
+        return encrypted_global_parameters, metrics
