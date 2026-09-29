@@ -1,0 +1,3 @@
+def get_clients():
+    print("Getting clients...")
+    return ["Client1", "Client2", "Client3", "Client4"]

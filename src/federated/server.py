@@ -1,9 +1,8 @@
 # src/federated/server.py
-
-from federated.global_model import GlobalModel
-from federated.client_adapter import get_clients
-from federated.rounds import run_round
-from federated.fedavg import fedavg
+from src.federated.global_model import GlobalModel
+from src.federated.client_adapter import get_clients
+from src.federated.rounds import run_round
+from src.federated.fedavg import fedavg
 
 
 def start_federated_training(num_rounds=3):

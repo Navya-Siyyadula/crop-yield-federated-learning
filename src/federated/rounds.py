@@ -1,73 +1,25 @@
-"""
-Multi-round federated learning.
-"""
-
-from typing import Callable, List, Sequence, Tuple
-
-from src.federated.fedavg import (
-    fedavg,
-    ClientUpdate,
-    ModelWeights,
-)
+from federated.fedavg import fedavg
 
 
-def run_federated_round(
-    global_weights: ModelWeights,
-    client_train_functions: Sequence[
-        Callable[[ModelWeights], ClientUpdate]
-    ],
-) -> ModelWeights:
-
-    client_updates: List[ClientUpdate] = []
-
-    for train_client in client_train_functions:
-
-        updated_weights, sample_count = train_client(
-            global_weights
-        )
-
-        client_updates.append(
-            (
-                updated_weights,
-                sample_count
-            )
-        )
-
-    return fedavg(client_updates)
-
-
-def run_federated_training(
-    initial_weights: ModelWeights,
-    client_train_functions: Sequence[
-        Callable[[ModelWeights], ClientUpdate]
-    ],
-    num_rounds: int = 2,
-) -> Tuple[ModelWeights, list]:
-
-    if num_rounds < 1:
-        raise ValueError(
-            "num_rounds must be at least 1."
-        )
-
-    global_weights = initial_weights
+def run_federated_training(global_weights, clients, num_rounds=3):
+    print("Starting Federated Learning")
 
     history = []
 
-    for round_number in range(
-        1,
-        num_rounds + 1
-    ):
+    for round_number in range(num_rounds):
+        print(f"\nRound {round_number + 1}")
 
-        global_weights = run_federated_round(
-            global_weights,
-            client_train_functions
-        )
+        client_updates = []
 
-        history.append(
-            {
-                "round": round_number,
-                "global_weights": global_weights,
-            }
-        )
+        for client in clients:
+            print(f"{client} training...")
+            update = client(global_weights)
+            client_updates.append(update)
 
+        print("Aggregating updates...")
+        global_weights = fedavg(client_updates)
+
+        history.append(global_weights)
+
+    print("\nTraining Complete")
     return global_weights, history
