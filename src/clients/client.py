@@ -1,0 +1,144 @@
+"""Flower client for local training with encrypted LSTM model updates."""
+
+from __future__ import annotations
+
+from pathlib import Path
+import re
+
+import numpy as np
+import pandas as pd
+from flwr.client import Client
+from flwr.common import (
+    Code,
+    FitIns,
+    FitRes,
+    GetParametersIns,
+    GetParametersRes,
+    GetPropertiesIns,
+    GetPropertiesRes,
+    Status,
+)
+
+from src.performance.latency import LatencyCollector
+from src.security.key_manager import load_key_from_environment
+from src.security.lstm_encrypted_update import (
+    encrypted_weights_to_parameters,
+    parameters_to_decrypted_weights,
+)
+
+FEATURE_COUNT = 38
+CLIENT_ID_PATTERN = re.compile(r"^client_[0-9]{2,}$")
+
+
+def load_client_dataset(client_dir: str | Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load one client's existing processed CSV pair; never partitions or creates data."""
+    client_dir = Path(client_dir)
+    x_path = client_dir / "X_train.csv"
+    y_path = client_dir / "y_train.csv"
+    missing = [path for path in (x_path, y_path) if not path.is_file()]
+    if missing:
+        expected = ", ".join(str(path) for path in missing)
+        raise FileNotFoundError(f"Client training data is missing: {expected}")
+
+    features = pd.read_csv(x_path).to_numpy(dtype=np.float32)
+    targets_frame = pd.read_csv(y_path)
+    if targets_frame.shape[1] != 1:
+        raise ValueError(f"Expected one target column in {y_path}")
+    targets = targets_frame.iloc[:, 0].to_numpy(dtype=np.float32)
+
+    if features.ndim != 2 or features.shape[1] != FEATURE_COUNT:
+        raise ValueError(
+            f"Expected X_train with {FEATURE_COUNT} columns; got shape {features.shape}"
+        )
+    if len(features) == 0 or len(targets) == 0:
+        raise ValueError("Client training dataset must contain at least one sample")
+    if len(features) != len(targets):
+        raise ValueError(
+            f"Feature/target row counts differ: {len(features)} != {len(targets)}"
+        )
+    if not np.isfinite(features).all() or not np.isfinite(targets).all():
+        raise ValueError("Client training data contains non-finite values")
+
+    # Match src/ml/train_lstm.py: one timestep containing 38 processed features.
+    return features.reshape(-1, 1, FEATURE_COUNT), targets
+
+
+class EncryptedLSTMFlowerClient(Client):
+    """Low-level Flower client preserving the bridge's opaque encrypted bytes."""
+
+    def __init__(
+        self,
+        client_id: str,
+        data_root: str | Path = "data/client_data",
+        *,
+        epochs: int = 1,
+        batch_size: int = 32,
+        model=None,
+        key: bytes | None = None,
+    ) -> None:
+        if not CLIENT_ID_PATTERN.fullmatch(client_id):
+            raise ValueError("client_id must look like client_01")
+        if epochs <= 0 or batch_size <= 0:
+            raise ValueError("epochs and batch_size must be positive")
+        self.client_id = client_id
+        self.data_dir = Path(data_root) / client_id
+        self.x_train, self.y_train = load_client_dataset(self.data_dir)
+        self.epochs = epochs
+        self.batch_size = batch_size
+        self.key = key if key is not None else load_key_from_environment()
+        if model is None:
+            # Build the same architecture used by the existing encrypted server.
+            from src.ml.lstm_model import build_lstm_model
+
+            model = build_lstm_model(input_features=FEATURE_COUNT)
+        self.model = model
+
+    def get_properties(self, ins: GetPropertiesIns) -> GetPropertiesRes:
+        _ = ins
+        return GetPropertiesRes(
+            status=Status(code=Code.OK, message=""),
+            properties={"client_id": self.client_id},
+        )
+
+    def get_parameters(self, ins: GetParametersIns) -> GetParametersRes:
+        _ = ins
+        parameters = encrypted_weights_to_parameters(self.model.get_weights(), self.key)
+        return GetParametersRes(
+            status=Status(code=Code.OK, message=""),
+            parameters=parameters,
+        )
+
+    def fit(self, ins: FitIns) -> FitRes:
+        # Flower Parameters contain the bridge's single opaque AES-GCM payload,
+        # not a NumPy tensor list.
+        global_weights = parameters_to_decrypted_weights(ins.parameters, self.key)
+        self.model.set_weights(global_weights)
+
+        latency = LatencyCollector()
+        with latency.measure("local_training_ms"):
+            self.model.fit(
+                self.x_train,
+                self.y_train,
+                epochs=self.epochs,
+                batch_size=self.batch_size,
+                verbose=0,
+            )
+
+        encrypted_update = encrypted_weights_to_parameters(
+            self.model.get_weights(),
+            self.key,
+            latency=latency,
+        )
+        payload_size = sum(len(tensor) for tensor in encrypted_update.tensors)
+        return FitRes(
+            status=Status(code=Code.OK, message=""),
+            parameters=encrypted_update,
+            num_examples=len(self.y_train),
+            metrics={
+                "client_id": self.client_id,
+                "training_latency_ms": latency.get("local_training_ms") or 0.0,
+                "serialization_latency_ms": latency.get("serialization_ms") or 0.0,
+                "encryption_latency_ms": latency.get("encryption_ms") or 0.0,
+                "encrypted_update_size_bytes": payload_size,
+            },
+        )

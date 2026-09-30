@@ -4,15 +4,17 @@ from pathlib import Path
 
 from src.federated.serialize import serialize_model_update
 from src.security.encryption import generate_key, encrypt_model_update
-from src.security.decryptography import decrypt_model_update
+from src.security.decryption import decrypt_model_update
+from tensorflow import keras
 
 
 # -----------------------------
 # Configuration
 # -----------------------------
 
-SAMPLE_FILE = Path("sample_model_update.bin")
-RESULT_FILE = Path("results/encryption_overhead.csv")
+PROJECT_ROOT = Path(__file__).resolve().parent
+MODEL_FILE = PROJECT_ROOT / "src" / "ml" / "lstm_crop_yield_model.keras"
+RESULT_FILE = PROJECT_ROOT / "results" / "encryption_overhead.csv"
 
 WARMUP_RUNS = 5
 MEASUREMENT_RUNS = 30
@@ -23,12 +25,12 @@ MEASUREMENT_RUNS = 30
 # -----------------------------
 
 def load_model_update():
-    if not SAMPLE_FILE.exists():
+    if not MODEL_FILE.exists():
         raise FileNotFoundError(
-            f"Sample model update not found: {SAMPLE_FILE}"
+            f"Trained LSTM model not found: {MODEL_FILE}"
         )
-
-    return SAMPLE_FILE.read_bytes()
+    model = keras.models.load_model(MODEL_FILE)
+    return serialize_model_update(model.get_weights())
 
 
 # -----------------------------
@@ -158,27 +160,34 @@ def main():
     )
 
     # Write CSV
+    file_exists = RESULT_FILE.exists() and RESULT_FILE.stat().st_size > 0
+    fieldnames = [
+        "run",
+        "serialized_size_bytes",
+        "encrypted_size_bytes",
+        "encryption_time_ms",
+        "decryption_time_ms",
+        "security_overhead_ms",
+    ]
+    if file_exists:
+        with open(RESULT_FILE, newline="", encoding="utf-8") as existing_file:
+            existing_header = next(csv.reader(existing_file), [])
+        if existing_header != fieldnames:
+            raise ValueError(f"Unexpected columns in {RESULT_FILE}")
+
     with open(
         RESULT_FILE,
-        "w",
-        newline=""
+        "a",
+        newline="",
+        encoding="utf-8",
     ) as csv_file:
-
-        fieldnames = [
-            "run",
-            "serialized_size_bytes",
-            "encrypted_size_bytes",
-            "encryption_time_ms",
-            "decryption_time_ms",
-            "security_overhead_ms"
-        ]
-
         writer = csv.DictWriter(
             csv_file,
             fieldnames=fieldnames
         )
 
-        writer.writeheader()
+        if not file_exists:
+            writer.writeheader()
         writer.writerows(results)
 
     # Calculate averages

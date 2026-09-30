@@ -10,6 +10,7 @@ lightgbm>=4.0
 
 # Federated learning
 flwr>=1.8
+tensorflow>=2.15
 
 # Encryption (for the encrypted FL variant)
 tenseal>=0.3
