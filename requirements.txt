@@ -7,6 +7,7 @@ scipy>=1.11
 # Modeling
 xgboost>=2.0
 lightgbm>=4.0
+tensorflow>=2.15
 
 # Federated learning
 flwr>=1.8
