@@ -55,6 +55,9 @@ class LSTMEncryptedFedAvgStrategy(fl.server.strategy.FedAvg):
         # and transport until aggregate_fit receives the returned updates; it
         # is not presented as pure network latency.
         self._round_started_at[server_round] = perf_counter()
+        start_energy_round = getattr(self.energy_meter, "start_round", None)
+        if callable(start_energy_round):
+            start_energy_round()
         return super().configure_fit(server_round, parameters, client_manager)
 
     def initialize_parameters(

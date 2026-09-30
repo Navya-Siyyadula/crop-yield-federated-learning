@@ -10,6 +10,7 @@ from uuid import uuid4
 import flwr as fl
 
 from src.federated.server_strategy import LSTMEncryptedFedAvgStrategy
+from src.performance.energy import CodeCarbonRoundEnergyMeter
 from src.performance.metrics_logger import MetricsLogger
 
 
@@ -74,6 +75,7 @@ def main() -> None:
         min_fit_clients=args.min_clients,
         min_available_clients=args.min_clients,
         metrics_logger=logger,
+        energy_meter=CodeCarbonRoundEnergyMeter(),
         energy_reference_joules=args.energy_reference_joules,
         latency_reference_ms=args.latency_reference_ms,
         reference_source=args.reference_source,
@@ -98,14 +100,24 @@ def main() -> None:
     else:
         records = []
 
-    print(f"Completed {len(records)} recorded round(s); metrics: {args.results}")
-    for row in records:
+    round_records = [row for row in records if not row.get("client_id")]
+    print(f"Completed {len(round_records)} recorded round(s); metrics: {args.results}")
+    for row in round_records:
         print(
             f"Round {row['round']}: clients={row['number_of_clients']}, "
             f"samples={row['number_of_samples']}, "
             f"round_ms={row['total_round_latency_ms'] or 'unavailable'}, "
-            f"energy={row['energy_status']}, ELEI={row['ELEI'] or 'unavailable'}"
+            f"energy_joules={row['energy_joules'] or 'unavailable'} "
+            f"({row['energy_status']}; {row['energy_method']}), "
+            f"ELEI={row['ELEI'] or 'unavailable'}"
         )
+        for client_row in records:
+            if client_row.get("client_id") and client_row.get("round") == row.get("round"):
+                print(
+                    f"  {client_row['client_id']}: samples={client_row['number_of_samples']}, "
+                    f"training_ms={client_row['training_latency_ms'] or 'unavailable'}, "
+                    f"encrypted_update_bytes={client_row['encrypted_update_size_bytes'] or 'unavailable'}"
+                )
 
 
 if __name__ == "__main__":

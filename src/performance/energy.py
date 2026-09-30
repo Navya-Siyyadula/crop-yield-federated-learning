@@ -104,3 +104,51 @@ class EnergyMeter:
         if not isinstance(reading, EnergyReading):
             raise TypeError("Energy provider must return an EnergyReading")
         return reading
+
+
+class CodeCarbonRoundEnergyMeter(EnergyMeter):
+    """Estimate whole-machine energy during the active Flower round."""
+
+    METHOD = (
+        "CodeCarbon software estimate (CPU/GPU/RAM), whole-machine Flower round scope"
+    )
+
+    def __init__(self, tracker_factory=None) -> None:
+        super().__init__(method=self.METHOD)
+        self._tracker_factory = tracker_factory
+        self._tracker = None
+
+    def start_round(self) -> None:
+        """Begin an isolated CodeCarbon task at the Flower round boundary."""
+        if self._tracker is not None:
+            raise RuntimeError("CodeCarbon round measurement is already active")
+        if self._tracker_factory is None:
+            from codecarbon import EmissionsTracker
+
+            tracker_factory = EmissionsTracker
+        else:
+            tracker_factory = self._tracker_factory
+        self._tracker = tracker_factory(
+            save_to_file=False,
+            log_level="error",
+        )
+        self._tracker.start()
+        self._tracker.start_task("flower_federated_round")
+
+    def read(self) -> EnergyReading:
+        if self._tracker is None:
+            return unavailable_energy(self.METHOD, "No Flower round was measured.")
+
+        tracker, self._tracker = self._tracker, None
+        try:
+            data = tracker.stop_task("flower_federated_round")
+            tracker.stop()
+        except Exception as exc:
+            return unavailable_energy(self.METHOD, f"CodeCarbon failed: {exc}")
+        if data is None or data.energy_consumed is None:
+            return unavailable_energy(self.METHOD, "CodeCarbon returned no energy estimate.")
+        return energy_reading(
+            float(data.energy_consumed) * 3_600_000.0,
+            "estimated",
+            self.METHOD,
+        )

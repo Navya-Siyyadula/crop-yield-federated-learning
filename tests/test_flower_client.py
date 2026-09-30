@@ -32,6 +32,22 @@ def test_load_client_csv_pair_matches_lstm_input_shape(tmp_path):
     assert targets.shape == (3,)
 
 
+def test_load_frozen_partition_csv_names(tmp_path):
+    client_dir = tmp_path / "client_02"
+    client_dir.mkdir()
+    pd.DataFrame(np.ones((2, 38), dtype=np.float32)).to_csv(
+        client_dir / "client_2_X.csv", index=False
+    )
+    pd.DataFrame({"yield_kg_per_hectare": [1.0, 2.0]}).to_csv(
+        client_dir / "client_2_y.csv", index=False
+    )
+
+    features, targets = load_client_dataset(client_dir)
+
+    assert features.shape == (2, 1, 38)
+    np.testing.assert_array_equal(targets, np.array([1.0, 2.0], dtype=np.float32))
+
+
 def test_client_data_missing_files_or_invalid_feature_count_fails(tmp_path):
     with pytest.raises(FileNotFoundError, match="X_train.csv"):
         load_client_dataset(tmp_path / "empty_client")

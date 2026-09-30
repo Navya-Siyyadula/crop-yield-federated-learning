@@ -31,4 +31,4 @@ jobs:
 
       - name: Run tests
         run: |
-          PYTHONPATH=src pytest tests/ -v --cov=src
+          PYTHONPATH=. pytest tests/ -v --cov=src

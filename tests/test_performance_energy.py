@@ -4,6 +4,7 @@ import pytest
 
 from src.performance.energy import (
     EnergyMeter,
+    CodeCarbonRoundEnergyMeter,
     energy_reading,
     calculate_elei,
     unavailable_energy,
@@ -19,6 +20,35 @@ def test_energy_statuses_and_no_default_fallback():
     assert energy_reading(3, "estimated", "explicit calibrated model").energy_joules == 3
     with pytest.raises(ValueError):
         energy_reading(-1, "estimated", "bad")
+
+
+def test_codecarbon_round_energy_is_explicitly_estimated():
+    class FakeEnergyData:
+        energy_consumed = 0.000001
+
+    class FakeTracker:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def start(self):
+            pass
+
+        def start_task(self, name):
+            self.task = name
+
+        def stop_task(self, name):
+            assert name == self.task
+            return FakeEnergyData()
+
+        def stop(self):
+            pass
+
+    meter = CodeCarbonRoundEnergyMeter(FakeTracker)
+    meter.start_round()
+    reading = meter.read()
+
+    assert reading.energy_joules == pytest.approx(3.6)
+    assert reading.energy_status == "estimated"
 
 
 def test_elei_equal_to_reference_is_one():

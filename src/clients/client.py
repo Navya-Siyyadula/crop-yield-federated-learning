@@ -25,6 +25,7 @@ from src.security.lstm_encrypted_update import (
     encrypted_weights_to_parameters,
     parameters_to_decrypted_weights,
 )
+from src.clients.local_training import train_local_model
 
 FEATURE_COUNT = 38
 CLIENT_ID_PATTERN = re.compile(r"^client_[0-9]{2,}$")
@@ -33,8 +34,19 @@ CLIENT_ID_PATTERN = re.compile(r"^client_[0-9]{2,}$")
 def load_client_dataset(client_dir: str | Path) -> tuple[np.ndarray, np.ndarray]:
     """Load one client's existing processed CSV pair; never partitions or creates data."""
     client_dir = Path(client_dir)
+    # Prefer the canonical train filenames when present. The frozen partitions
+    # currently tracked by the repository use client_N_X/client_N_y names.
+    match = re.fullmatch(r"client_([0-9]+)", client_dir.name)
+    suffix = match.group(1) if match else None
     x_path = client_dir / "X_train.csv"
     y_path = client_dir / "y_train.csv"
+    if suffix is not None:
+        partition_x = client_dir / f"client_{int(suffix)}_X.csv"
+        partition_y = client_dir / f"client_{int(suffix)}_y.csv"
+        if x_path.is_file() and y_path.is_file():
+            pass
+        elif partition_x.is_file() and partition_y.is_file():
+            x_path, y_path = partition_x, partition_y
     missing = [path for path in (x_path, y_path) if not path.is_file()]
     if missing:
         expected = ", ".join(str(path) for path in missing)
@@ -142,3 +154,26 @@ class EncryptedLSTMFlowerClient(Client):
                 "encrypted_update_size_bytes": payload_size,
             },
         )
+class EdgeClient:
+    """Represents one simulated edge client/farm."""
+
+    def __init__(self, client_id, x_path, y_path):
+        self.client_id = client_id
+        self.x_path = Path(x_path)
+        self.y_path = Path(y_path)
+
+    def load_data(self):
+        X = pd.read_csv(self.x_path).values
+        y = pd.read_csv(self.y_path).values
+        return X, y
+
+    def fit(self, initial_weights=None, epochs=1, batch_size=16):
+        X, y = self.load_data()
+        weights, num_samples = train_local_model(
+            X=X,
+            y=y,
+            initial_weights=initial_weights,
+            epochs=epochs,
+            batch_size=batch_size,
+        )
+        return weights, num_samples
