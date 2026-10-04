@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+from time import perf_counter
 
 import numpy as np
 import pandas as pd
@@ -87,6 +88,8 @@ class EncryptedLSTMFlowerClient(Client):
         batch_size: int = 32,
         model=None,
         key: bytes | None = None,
+        target_mean: float = 0.0,
+        target_scale: float = 1.0,
     ) -> None:
         if not CLIENT_ID_PATTERN.fullmatch(client_id):
             raise ValueError("client_id must look like client_01")
@@ -95,6 +98,14 @@ class EncryptedLSTMFlowerClient(Client):
         self.client_id = client_id
         self.data_dir = Path(data_root) / client_id
         self.x_train, self.y_train = load_client_dataset(self.data_dir)
+        self.target_mean = float(target_mean)
+        self.target_scale = float(target_scale)
+        if not np.isfinite(self.target_mean) or not np.isfinite(self.target_scale):
+            raise ValueError("Shared target scaler parameters must be finite")
+        if self.target_scale <= 0:
+            raise ValueError("Shared target scaler scale must be positive")
+        self.y_train_kg_per_hectare = self.y_train.copy()
+        self.y_train = ((self.y_train - self.target_mean) / self.target_scale).astype(np.float32)
         self.epochs = epochs
         self.batch_size = batch_size
         self.key = key if key is not None else load_key_from_environment()
@@ -123,8 +134,17 @@ class EncryptedLSTMFlowerClient(Client):
     def fit(self, ins: FitIns) -> FitRes:
         # Flower Parameters contain the bridge's single opaque AES-GCM payload,
         # not a NumPy tensor list.
+        decryption_started = perf_counter()
         global_weights = parameters_to_decrypted_weights(ins.parameters, self.key)
+        global_decryption_ms = (perf_counter() - decryption_started) * 1000.0
         self.model.set_weights(global_weights)
+
+        # A round/client-specific seed makes local shuffle initialization
+        # reproducible in the local four-client experiment.
+        import tensorflow as tf
+        server_round = int(ins.config.get("server_round", 0))
+        client_number = int(self.client_id.rsplit("_", 1)[1])
+        tf.keras.utils.set_random_seed(42 + 1009 * server_round + client_number)
 
         latency = LatencyCollector()
         with latency.measure("local_training_ms"):
@@ -134,6 +154,7 @@ class EncryptedLSTMFlowerClient(Client):
                 epochs=self.epochs,
                 batch_size=self.batch_size,
                 verbose=0,
+                shuffle=False,
             )
 
         encrypted_update = encrypted_weights_to_parameters(
@@ -151,7 +172,10 @@ class EncryptedLSTMFlowerClient(Client):
                 "training_latency_ms": latency.get("local_training_ms") or 0.0,
                 "serialization_latency_ms": latency.get("serialization_ms") or 0.0,
                 "encryption_latency_ms": latency.get("encryption_ms") or 0.0,
+                "decryption_latency_ms": global_decryption_ms,
                 "encrypted_update_size_bytes": payload_size,
+                "target_scaler_mean": self.target_mean,
+                "target_scaler_scale": self.target_scale,
             },
         )
 class EdgeClient:

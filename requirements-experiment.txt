@@ -1,0 +1,14 @@
+# Tested direct dependencies for the reproducible comparison and test suite.
+# Python 3.12 x64; TensorFlow's Windows CPU wheel is provided by tensorflow-intel.
+numpy==1.26.4
+pandas==3.0.6
+scipy==1.17.1
+scikit-learn==1.9.1
+tensorflow==2.18.0
+flwr==1.8.0
+cryptography==42.0.8
+codecarbon==3.3.1
+matplotlib==3.11.2
+pytest==9.1.1
+joblib==1.6.0
+PyYAML==6.0.3

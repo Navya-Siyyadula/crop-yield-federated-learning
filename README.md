@@ -1,80 +1,57 @@
 # Crop Yield Federated Learning
 
-A federated learning system for predicting crop yield across multiple, non-colocated data sources (clients), without centralizing raw agricultural data. Includes an encrypted FL variant, performance/latency benchmarking, and a monitoring dashboard.
+This project studies crop-yield regression with a single-timestep LSTM, Flower federated learning, a logical edge/cloud comparison, AES-256-GCM protected model updates, and NSGA-II resource optimization.
 
-## Overview
+## Dataset and method
 
-Traditional ML pipelines require pooling all data centrally, which isn't always feasible or desirable for distributed agricultural data (privacy, bandwidth, ownership). This project trains a shared crop-yield model across multiple simulated clients using **Federated Averaging (FedAvg)**, comparing it against a centralized baseline, and optionally applying **homomorphic encryption** to protect model updates in transit.
+The frozen processed dataset contains 350 training, 75 validation, and 75 test rows, with 38 features and target `yield_kg_per_hectare`. The model input is `(samples, 1, 38)` and the architecture is `LSTM(64) → Dense(32, ReLU) → Dense(1)`.
 
-## Project Structure
+One `StandardScaler` is fit on all 350 training targets and shared by four Flower clients (88/88/88/86 samples). Validation and test targets do not fit the scaler; predictions are inverse-transformed before scoring in kg/ha. Flower FedAvg runs 20 rounds per candidate with seed 42. AES-256-GCM provides confidentiality and authenticated integrity for update payloads. NSGA-II minimizes measured latency and CodeCarbon-estimated energy as separate objectives; MAE, RMSE, and R² are evaluation metrics only.
 
-```
-config/        # YAML configs for model, clients, FL rounds, security
-data/          # raw -> interim -> cleaned -> processed, plus per-client splits
-notebooks/     # exploratory analysis, from EDA through FL experiments
-src/           # core library code
-  data/            data loading, cleaning, validation, splitting
-  preprocessing/   encoding, scaling, feature transforms
-  models/          baseline + trainable model, train/predict/evaluate
-  clients/         client simulation, local training
-  federated/       FL server, FedAvg, round orchestration
-  security/        encryption/decryption, key management
-  performance/     timing, latency, energy metrics
-  evaluation/      metrics, comparisons, reporting
-experiments/   # one folder per experiment axis (centralized, edge, federated,
-               # encryption, iid vs non-iid, client count, round count)
-results/       # metrics, latency, energy, trained models, figures, tables
-dashboard/     # Streamlit app for visualizing training/results
-scripts/       # CLI entry points to run each stage end-to-end
-tests/         # unit tests, mirrors src/ layout
-docs/          # architecture, dataset, ML, FL, security, performance write-ups
-```
+## Quickstart
 
-## Getting Started
+The repository already contains the final measured results, so no experiment run is needed to inspect them. The full comparison is computationally expensive (about 28 minutes on the recorded machine).
 
 ```bash
-# 1. Clone and enter the repo
+# 1. Clone and enter the repository
 git clone https://github.com/Navya-Siyyadula/crop-yield-federated-learning.git
 cd crop-yield-federated-learning
 
-# 2. Create a virtual environment
+# 2. Create and activate an environment
 python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
+source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
-pip install -r requirements.txt
+# 3. Install the tested experiment dependencies
+python -m pip install -r requirements-experiment.txt
 
-# 4. Copy environment template
-cp .env.example .env
+# 4. Run tests
+python -m pytest -q
+
+# 5. Reproduce the complete comparison only if required (expensive)
+python scripts/run_final_comparison.py --rounds 20 --central-epochs 20 --population 6 --generations 3
 ```
 
-## Typical Workflow
+Inspect existing outputs under `results/`. The final narrative is in [docs/final_report.md](docs/final_report.md); protocol details are in [docs/experiments.md](docs/experiments.md).
 
-```bash
-python scripts/prepare_data.py        # clean + preprocess raw data
-python scripts/create_clients.py      # partition data across clients
-python scripts/train_centralized.py   # baseline model
-python scripts/run_federated.py       # federated training (FedAvg)
-python scripts/run_encrypted_fl.py    # federated training with encryption
-python scripts/generate_results.py    # aggregate metrics into results/
-```
+## Final results
 
-Launch the dashboard:
+| Approach | MAE (kg/ha) | RMSE (kg/ha) | R² | Latency (s) | Energy (J, estimated) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Centralized LSTM | 1,077.62 | 1,198.57 | 0.0280 | 4.8486 | 88.9362 |
+| Edge–Cloud LSTM | 1,123.96 | 1,243.78 | -0.0468 | 12.5459 | 120.9701 |
+| Federated LSTM | 1,094.43 | 1,224.33 | -0.0143 | 111.8122 | 1,039.7282 |
+| EMO-selected Federated LSTM | 1,093.51 | 1,215.88 | -0.0003 | 110.1596 | 1,024.7889 |
 
-```bash
-streamlit run dashboard/app.py
-```
+NSGA-II evaluated 13 unique configurations. Its observed Pareto solution was `candidate_012` (generation 2, one local epoch, batch size 64), selected by normalized Euclidean distance to the ideal point. The engineering pipeline completed successfully, but predictive performance is modest and R² is near zero; these results do not support a high-accuracy claim.
 
-Run tests:
+## Limitations
 
-```bash
-pytest tests/ -v
-```
+The edge/cloud and federated runs are logical single-host loopback simulations, not physical deployment or WAN measurements. Latency is measured execution time. CodeCarbon supplies estimated energy, not electrical meter readings. The LSTM sees one timestep and does not learn multi-step temporal dependencies. Findings are limited to this frozen dataset and split. See [EMO methodology](docs/emo_methodology.md), [security](docs/security.md), and [performance methodology](docs/performance/latency_methodology.md).
 
-## Team
+## Project structure
 
-See `docs/team/responsibility_matrix.md` for role breakdown and `docs/team/execution_book.md` for the project plan.
+`src/` contains the model, clients, federation, security, performance, and evaluation code; `scripts/` contains command-line entry points; `tests/` contains the test suite; `docs/` contains the methodology and final report; and `results/` contains experiment artifacts.
 
 ## License
 
-See `LICENSE`.
+See [LICENSE](LICENSE).

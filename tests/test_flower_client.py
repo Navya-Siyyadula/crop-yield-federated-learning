@@ -86,6 +86,8 @@ def test_fit_decrypts_trains_encrypts_and_reports_fedavg_sample_count(tmp_path):
         key=key,
         epochs=2,
         batch_size=4,
+        target_mean=1.0,
+        target_scale=2.0,
     )
     received_parameters = encrypted_weights_to_parameters(
         [np.array([4.0], dtype=np.float32)], key
@@ -97,11 +99,14 @@ def test_fit_decrypts_trains_encrypts_and_reports_fedavg_sample_count(tmp_path):
     assert model.weights[0][0] == 5.0
     assert model.fit_args[0] == (3, 1, 38)
     assert model.fit_args[1] == (3,)
+    np.testing.assert_allclose(client.y_train, [-0.5, 0.0, 0.5])
     assert model.fit_args[2]["epochs"] == 2
     assert result.metrics["client_id"] == "client_01"
     assert result.metrics["training_latency_ms"] >= 0
     assert result.metrics["encrypted_update_size_bytes"] == len(
         result.parameters.tensors[0]
     )
+    assert result.metrics["target_scaler_mean"] == 1.0
+    assert result.metrics["target_scaler_scale"] == 2.0
     recovered = parameters_to_decrypted_weights(result.parameters, key)
     np.testing.assert_array_equal(recovered[0], np.array([5.0], dtype=np.float32))

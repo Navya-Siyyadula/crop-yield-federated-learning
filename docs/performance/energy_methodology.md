@@ -4,11 +4,13 @@
 
 Energy is the energy consumed by the hardware for an FL operation, expressed in joules. Every record has an `energy_status` of `measured`, `estimated`, or `unavailable`, plus an `energy_method` describing its source. Predictive quality metrics (MAE, RMSE, and R²) are independent of energy and are not part of ELEI.
 
-The current repository has no supported power/energy telemetry provider or calibrated CPU power model. The default `EnergyMeter` therefore writes `energy_status=unavailable`, a blank `energy_joules`, and an explanatory method/detail. It does not infer energy from elapsed time. `EnergyReading` accepts measured or estimated values only when a caller explicitly supplies both the value and method. There is no default estimator and no fabricated joule fallback.
+The final comparison uses CodeCarbon task tracking around centralized training and each complete Flower round. It records whole-machine software estimates for CPU/GPU/RAM; these are labeled `estimated`, not electrical meter readings. The generic default `EnergyMeter` remains unavailable unless a provider is configured; elapsed time is never converted to joules.
+
+For each candidate, the runner sums 20 per-round `energy_consumed` values (kWh converted to joules), retaining `energy_status=estimated`. The centralized and one-round logical edge/cloud rows use their own CodeCarbon task estimates. Emissions (kg CO2e) are never treated as energy. If a candidate lacks any round energy estimate, its energy objective is unavailable and no Pareto front/EMO selection is claimed. No fallback value is imputed.
 
 ## Measurement limitations on Windows
 
-The project's Windows environment does not expose a portable, repository-configured electrical energy source. Windows processor energy counters, when present, are hardware and driver dependent; ordinary process CPU utilization and elapsed time do not establish joules. No telemetry package or device-specific interface is configured here. Consequently energy for this implementation is unavailable until a validated meter/provider is supplied. Unit tests use a fake provider only to verify status handling and do not read hardware.
+CodeCarbon estimates are software-derived and host scoped; they are not calibrated wall-power measurements. The local Flower run shares one Windows host and includes background host activity within the tracker scope. Estimates can vary with host load and should not be presented as direct electrical measurements. Unit tests use a fake provider only to verify status handling and do not read hardware.
 
 ## ELEI and reference normalization
 
