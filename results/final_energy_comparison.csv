@@ -1,0 +1,4 @@
+framework,energy_joules,energy_kj,edge_energy_joules,cloud_energy_joules,network_energy_joules
+Proposed FLyer / EMO-FL,5519.77,5.52,1209.46,4180.57,129.74
+Edge-Cloud without FL,9410.23,9.41,509.86,8583.56,316.82
+Cloud-only,12938.72,12.939,747.87,11501.46,689.39

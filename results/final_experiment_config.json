@@ -1,0 +1,39 @@
+{
+    "experiment_title": "Three-Framework Architecture Latency and Energy Comparison",
+    "benchmark_network_assumptions": {
+        "uplink_bandwidth_mbps": 5.0,
+        "downlink_bandwidth_mbps": 10.0,
+        "rtt_latency_ms": 35.0
+    },
+    "power_profile_assumptions_watts": {
+        "edge_compute_power": 5.8,
+        "edge_transmission_power": 3.4,
+        "edge_idle_power": 1.6,
+        "cloud_compute_power": 240.0,
+        "cloud_idle_power": 75.0,
+        "network_transport_power": 18.0
+    },
+    "proposed_flyer_emo_configuration": {
+        "rounds": 2,
+        "local_epochs": 1,
+        "batch_size": 8,
+        "solution_id": 1,
+        "encryption_algorithm": "AES-256-GCM",
+        "aggregation_strategy": "Federated Averaging (FedAvg)"
+    },
+    "workload_characteristics": {
+        "num_edge_clients": 4,
+        "input_features": 38,
+        "target_variable": "yield_kg_per_hectare",
+        "model_architecture": "Input(1, 38) -> LSTM(64) -> Dense(32, ReLU) -> Dense(1)",
+        "model_serialized_bytes": 105319,
+        "model_encrypted_bytes": 105347,
+        "operational_feature_bytes": 5020155,
+        "operational_raw_bytes": 10542325
+    },
+    "architectures_compared": [
+        "Proposed FLyer / EMO-FL",
+        "Edge-Cloud without FL",
+        "Cloud-only"
+    ]
+}

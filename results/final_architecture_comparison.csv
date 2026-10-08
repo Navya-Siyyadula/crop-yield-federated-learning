@@ -1,0 +1,4 @@
+framework,latency_seconds,energy_joules
+Proposed FLyer / EMO-FL,12.8108,5519.77
+Edge-Cloud without FL,23.5034,9410.23
+Cloud-only,33.0389,12938.72

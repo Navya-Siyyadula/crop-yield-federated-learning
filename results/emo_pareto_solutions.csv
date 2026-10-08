@@ -1,0 +1,4 @@
+solution_id,rounds,local_epochs,batch_size,latency_seconds,energy_joules,energy_kj,is_selected
+1,2,1,8,12.8108,5519.77,5.52,True
+2,2,1,16,12.8108,5519.77,5.52,False
+3,2,1,32,12.8108,5519.77,5.52,False

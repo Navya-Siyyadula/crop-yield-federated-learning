@@ -1,0 +1,4 @@
+framework,latency_seconds,compute_latency_seconds,communication_latency_seconds
+Proposed FLyer / EMO-FL,12.8108,11.1539,1.657
+Edge-Cloud without FL,23.5034,15.3169,8.1865
+Cloud-only,33.0389,16.0169,17.022

@@ -1,0 +1,45 @@
+{
+    "validation_passed": true,
+    "ordering_check": {
+        "latency": "12.81 s < 23.50 s < 33.04 s",
+        "energy_kj": "5.52 kJ < 9.41 kJ < 12.94 kJ",
+        "energy_joules": "5519.77 J < 9410.23 J < 12938.72 J"
+    },
+    "selected_emo_fl_configuration": {
+        "solution_id": 1,
+        "rounds": 2,
+        "local_epochs": 1,
+        "batch_size": 8,
+        "latency_seconds": 12.8108,
+        "energy_kj": 5.52
+    },
+    "comparison_summary": {
+        "proposed_flyer_emo_fl": {
+            "latency_seconds": 12.8108,
+            "energy_joules": 5519.77,
+            "energy_kj": 5.52,
+            "compute_latency_seconds": 11.1539,
+            "comm_latency_seconds": 1.657
+        },
+        "edge_cloud_without_fl": {
+            "latency_seconds": 23.5034,
+            "energy_joules": 9410.23,
+            "energy_kj": 9.41,
+            "compute_latency_seconds": 15.3169,
+            "comm_latency_seconds": 8.1865
+        },
+        "cloud_only": {
+            "latency_seconds": 33.0389,
+            "energy_joules": 12938.72,
+            "energy_kj": 12.939,
+            "compute_latency_seconds": 16.0169,
+            "comm_latency_seconds": 17.022
+        }
+    },
+    "percentage_improvements": {
+        "latency_reduction_vs_edge_cloud_percent": 45.49,
+        "latency_reduction_vs_cloud_only_percent": 61.23,
+        "energy_reduction_vs_edge_cloud_percent": 41.34,
+        "energy_reduction_vs_cloud_only_percent": 57.34
+    }
+}

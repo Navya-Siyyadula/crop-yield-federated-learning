@@ -13,4 +13,9 @@ data/client_data/*/*
 !data/**/.gitkeep
 results/**/*
 !results/**/.gitkeep
+!results/*.csv
+!results/*.json
+!results/*.txt
+!results/*.png
+!results/*.md
 .DS_Store

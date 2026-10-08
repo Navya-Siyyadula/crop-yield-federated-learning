@@ -1,0 +1,63 @@
+================================================================================
+FINAL ARCHITECTURE PERFORMANCE COMPARISON REPORT
+Crop Yield Federated Learning Framework
+================================================================================
+
+1. EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+The experimental evaluation compares the three foundational system architectures
+from the base paper:
+  (1) Proposed FLyer / EMO-FL: Edge local processing + parallel local LSTM training
+      + AES-256-GCM encrypted update exchange + cloud FedAvg aggregation (EMO-optimized)
+  (2) Edge-Cloud without FL: Edge preprocessing -> intermediate feature upload
+      -> cloud centralized LSTM training
+  (3) Cloud-only: Raw sensor telemetry streaming -> cloud end-to-end preprocessing
+      -> cloud centralized LSTM training
+
+2. FINAL ARCHITECTURE COMPARISON TABLE
+--------------------------------------------------------------------------------
+Framework                   Latency (s)    Energy (J)     Energy (kJ)   Ordering Status
+-------------------------  -------------  -------------  -------------  ---------------
+Proposed FLyer / EMO-FL          12.81         5519.77          5.52      LOWEST  (Rank 1)
+Edge-Cloud without FL            23.50         9410.23          9.41      MIDDLE  (Rank 2)
+Cloud-only                       33.04        12938.72         12.94      HIGHEST (Rank 3)
+--------------------------------------------------------------------------------
+
+3. MANDATORY SCIENTIFIC PROPERTY VALIDATION
+--------------------------------------------------------------------------------
+Condition 1: proposed_latency < edge_cloud_latency < cloud_only_latency
+Result     : 12.81 s < 23.50 s < 33.04 s
+Status     : [PASS]
+
+Condition 2: proposed_energy < edge_cloud_energy < cloud_only_energy
+Result     : 5.52 kJ < 9.41 kJ < 12.94 kJ  (5519.77 J < 9410.23 J < 12938.72 J)
+Status     : [PASS]
+
+4. RELATIVE IMPROVEMENT OF PROPOSED FLYER / EMO-FL
+--------------------------------------------------------------------------------
+Latency Reduction :
+  - 45.49% faster than Edge-Cloud without FL
+  - 61.23% faster than Cloud-only
+
+Energy Reduction  :
+  - 41.34% lower energy than Edge-Cloud without FL
+  - 57.34% lower energy than Cloud-only
+
+5. EMO / NSGA-II OPTIMIZATION SUMMARY
+--------------------------------------------------------------------------------
+Selected Configuration : Solution ID #1
+  - Communication Rounds : 2
+  - Local Epochs         : 1
+  - Batch Size           : 8
+  - Pareto Front Solutions : exported to results/emo_pareto_solutions.csv
+
+6. SYSTEM & NETWORK MODEL SPECIFICATIONS
+--------------------------------------------------------------------------------
+  - Uplink Bandwidth     : 5.0 Mbps
+  - Downlink Bandwidth   : 10.0 Mbps
+  - Round-Trip Latency   : 35.0 ms
+  - Model Update Size    : 105,286 bytes (AES-256-GCM encrypted)
+  - Edge Compute Power   : 5.8 W
+  - Edge Radio TX Power  : 3.4 W
+  - Cloud Server Power   : 240.0 W (active) / 75.0 W (idle)
+================================================================================
